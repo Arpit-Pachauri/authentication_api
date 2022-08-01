@@ -3,10 +3,36 @@ const User = require( '../model/user' );
 const router = express.Router();
 const bcrypt=require('bcryptjs');
 const jwt=require('jsonwebtoken');
+const cookieParser = require("cookie-parser");
+router.use(cookieParser());
 router.use(express.json());    
+const dotenv=require('dotenv');
+dotenv.config({path: './config.env'});
+const SECRET_KEY=process.env.SECRET_KEY;
+const { ObjectId } = require( "mongodb" );
+
+// authorization
+
+const authorization = (req, res, next) => {
+  const token = req.cookies.jwtoken;
+  console.log(token);
+  if (!token) {
+    return res.sendStatus(403);
+  }
+  try {
+    const data =jwt.verify(token, SECRET_KEY);
+    // req._id = data.id;
+    return next();
+  } catch {
+    return res.sendStatus(403);
+  }
+};
 
 
-// post request using promises
+
+
+// 1st user Signup
+
 
 router.post('/user/signup',(req,res)=>{
     // console.log("entered");
@@ -36,7 +62,9 @@ router.post('/user/signup',(req,res)=>{
    }).catch((err)=>{console.log(err)});
 })
 
-// post request using async await
+
+// 2nd User Login
+
 
 router.post('/user/login',async (req,res)=>{
   try{
@@ -46,10 +74,11 @@ router.post('/user/login',async (req,res)=>{
         return res.status(400).json({err: "Plz filled the data"});
     }
     const userlogin= await User.findOne({email:email});
-    // console.log(userlogin);
+    console.log(userlogin);
     if(userlogin){
       const isMatch = bcrypt.compareSync(password,userlogin.password);
       if(!isMatch){
+        console.log("yes");
           res.status(400).json({err: "Invalid Credentials"});
       }
       else{
@@ -69,6 +98,38 @@ router.post('/user/login',async (req,res)=>{
     console.log(err);
   }
 })
+
+
+// 3rd Profile Update
+
+
+router.patch('/profile/:userid',authorization,(req,res)=>{
+  const updates=req.body;
+  if(ObjectId.isValid(req.params.userid)){
+  User.updateOne({_id: ObjectId(req.params.userid)},{$set: updates})
+  .then(result=>{
+      res.status(200).json(result);
+  })
+  .catch(err =>{
+      res.status(500).json({error: "enable to update"});
+  })
+ }
+ else{
+   res.status(500).json({error: "Invalid doc id"});
+ }
+})
+
+
+// 11 user logout api
+
+
+router.get("/user/logout", authorization, (req, res) => {
+  return res
+    .clearCookie("jwtoken")
+    .status(200)
+    .json({ message: "Successfully logged out " });
+});
+
 
 
 
